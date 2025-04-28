@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/themes/vue.css"/>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div id="app">Please wait...</div>
+	<script>
+		window.$docsify = {
+			name: 'godot tiny mmo',
+			repo: "https://github.com/SlayHorizon/godot-tiny-mmo",
+			//logo: 'icon.svg',
+			
+			topMargin: 0, // default: 0
+			auto2top: true,
+			// themeColor: '#3F51B5',
+			themeColor:  '#4285b9',
+			coverpage: true,
+			coverpage: "coverpage.md",
+			//onlyCover: true,
+			
+			homepage: "home.md",
+			
+			loadSidebar: true,
+			loadSidebar: "sidebar.md",
+			maxLevel: 4,
+			subMaxLevel: 2,
+			// plugins: [
+			// 		EditOnGithubPlugin.create(docBase, docEditBase, title)
+			// 	],
+			};
+			</script>
+	<script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+	<script src="//cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-ini.min.js"></script>
+	<script src="//cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-gdscript.js"></script>
+	<script src="https://unpkg.com/docsify-plugin-flexible-alerts"></script>
+</body>
+</html>
