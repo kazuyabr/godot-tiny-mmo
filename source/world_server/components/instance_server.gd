@@ -1,28 +1,22 @@
 class_name ServerInstance
 extends SubViewport
 
-
 signal player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper)
 
 const PLAYER: PackedScene = preload("res://source/common/entities/characters/player/player.tscn")
 
 static var world_server: WorldServer
-
 static var chat_commands: Dictionary[String, ChatCommand]
 var local_chat_commands: Dictionary[String, ChatCommand]
 
-
-var entity_collection: Dictionary = {}#[int, Entity]
-## Current connected peers to the instance.
+var entity_collection: Dictionary = {} #[int, Entity]
 var connected_peers: PackedInt64Array = PackedInt64Array()
-## Peers coming from another instance.
-var awaiting_peers: Dictionary = {}#[int, Player]
+var awaiting_peers: Dictionary = {} #[int, Player]
 
 var last_accessed_time: float
 
 var instance_map: Map
 var instance_resource: InstanceResource
-
 
 func _ready() -> void:
 	world_server.multiplayer_api.peer_disconnected.connect(
@@ -30,7 +24,6 @@ func _ready() -> void:
 			if connected_peers.has(peer_id):
 				despawn_player(peer_id)
 	)
-
 
 func _physics_process(_delta: float) -> void:
 	var state: Dictionary = {"EC" = {}}
@@ -40,18 +33,14 @@ func _physics_process(_delta: float) -> void:
 	for peer_id: int in connected_peers:
 		fetch_instance_state.rpc_id(peer_id, state)
 
-
 func load_map(map_path: String) -> void:
 	if instance_map:
 		instance_map.queue_free()
 	instance_map = load(map_path).instantiate()
 	add_child(instance_map)
-	#add_child(CameraProbe.new())
-	
 	for child in instance_map.get_children():
 		if child is InteractionArea:
 			child.player_entered_interaction_area.connect(self._on_player_entered_interaction_area)
-
 
 func _on_player_entered_interaction_area(player: Player, interaction_area: InteractionArea) -> void:
 	if player.just_teleported:
@@ -65,8 +54,6 @@ func _on_player_entered_interaction_area(player: Player, interaction_area: Inter
 				get_path_to(player),
 				{^":position": interaction_area.target.global_position}
 			)
-
-
 
 @rpc("authority", "call_remote", "reliable", 1)
 func update_node(node_path: NodePath, to_update: Dictionary[NodePath, Variant]) -> void:
@@ -85,10 +72,8 @@ func update_node(node_path: NodePath, to_update: Dictionary[NodePath, Variant]) 
 			continue
 		target.set_indexed(TinyNodePath.get_path_to_property(path), to_update[path])
 		root.spawn_state[path] = to_update[path]
-	
 	for peer_id: int in connected_peers:
 		update_node.rpc_id(peer_id, node_path, to_update)
-
 
 @rpc("authority", "call_remote", "reliable", 1)
 func update_entity(entity: Entity, to_update: Dictionary) -> void:
@@ -97,30 +82,28 @@ func update_entity(entity: Entity, to_update: Dictionary) -> void:
 	for peer_id: int in connected_peers:
 		update_entity.rpc_id(peer_id, entity.name.to_int(), to_update)
 
-
 @rpc("authority", "call_remote", "reliable", 0)
 func fetch_instance_state(_new_state: Dictionary):
 	pass
-
 
 @rpc("any_peer", "call_remote", "reliable", 0)
 func fetch_player_state(sync_state: Dictionary) -> void:
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if entity_collection.has(peer_id):
 		var entity: Entity = entity_collection[peer_id] as Entity
-		if entity.sync_state["T"] < sync_state["T"]:
-			# Security issue: add a white list
-			#if sync_state.keys().all(func(x): return ["position", "sprite_frames", "animation", "flipped", "T"].any(func(y): return x == y)):
-			for key: String in sync_state:
-				entity.sync_state[key] = sync_state[key]
-			entity.sync_state = entity.sync_state
-
+		# [CORREÇÃO] Verificação segura do campo "T"
+		if sync_state.has("T") and entity.sync_state.has("T"):
+			var t_remote = sync_state["T"]
+			var t_local = entity.sync_state["T"]
+			if typeof(t_remote) in [TYPE_INT, TYPE_FLOAT] and typeof(t_local) in [TYPE_INT, TYPE_FLOAT]:
+				if t_local < t_remote:
+					for key: String in sync_state:
+						entity.sync_state[key] = sync_state[key]
+					entity.sync_state = entity.sync_state
 
 @rpc("any_peer", "call_remote", "reliable", 0)
 func player_trying_to_change_weapon(weapon_path: String, _side: bool = true) -> void:
 	var peer_id: int = multiplayer.get_remote_sender_id()
-	# Check if player has the weapon
-	#var entity: Entity = entity_collection[peer_id] as Entity
 	var player: Player = entity_collection[peer_id] as Player
 	if not player:
 		return
@@ -130,12 +113,10 @@ func player_trying_to_change_weapon(weapon_path: String, _side: bool = true) -> 
 			{^":weapon_name_right": weapon_path}
 		)
 
-
 @rpc("any_peer", "call_remote", "reliable", 0)
 func ready_to_enter_instance() -> void:
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	spawn_player(peer_id)
-
 
 #region spawn/despawn
 @rpc("authority", "call_remote", "reliable", 0)
@@ -155,7 +136,6 @@ func spawn_player(peer_id: int, spawn_state: Dictionary = {}) -> void:
 	connected_peers.append(peer_id)
 	propagate_spawn(peer_id, player.spawn_state)
 
-
 func instantiate_player(peer_id: int) -> Player:
 	var player_resource: PlayerResource = world_server.connected_players[peer_id]
 	var character_resource: CharacterResource = ResourceLoader.load(
@@ -174,15 +154,11 @@ func instantiate_player(peer_id: int) -> Player:
 	print(new_player.spawn_state)
 	return new_player
 
-## Spawn the new player on all other client in the current instance
-## and spawn all other players on the new client.
 func propagate_spawn(player_id: int, spawn_state: Dictionary) -> void:
-	#propagate_rpc(spawn_player)
 	for peer_id: int in connected_peers:
 		spawn_player.rpc_id(peer_id, player_id, spawn_state)
 		if player_id != peer_id:
 			spawn_player.rpc_id(player_id, peer_id, entity_collection[peer_id].spawn_state)
-
 
 @rpc("authority", "call_remote", "reliable", 0)
 func despawn_player(peer_id: int, delete: bool = false) -> void:
@@ -193,12 +169,10 @@ func despawn_player(peer_id: int, delete: bool = false) -> void:
 			player.queue_free()
 		else:
 			remove_child(player)
-			
 		entity_collection.erase(peer_id)
 	for id: int in connected_peers:
 		despawn_player.rpc_id(id, peer_id)
 #endregion
-
 
 #region chat
 @rpc("any_peer", "call_remote", "reliable", 1)
@@ -208,11 +182,9 @@ func player_submit_message(new_message: String) -> void:
 	for id: int in connected_peers:
 		fetch_message.rpc_id(id, new_message, peer_id)
 
-
 @rpc("authority", "call_remote", "reliable", 1)
 func fetch_message(_message: String, _sender_id: int) -> void:
 	pass
-
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func player_submit_command(command: String) -> void:
@@ -231,27 +203,20 @@ func player_submit_command(command: String) -> void:
 	else:
 		fetch_message.rpc_id(peer_id, "Command not found.", 1)
 
-
 func find_chat_command(command_name: String) -> ChatCommand:
 	if local_chat_commands.has(command_name):
 		return local_chat_commands.get(command_name)
 	return chat_commands.get(command_name)
 #endregion
 
-
-# WIP
 @rpc("any_peer", "call_remote", "reliable", 1)
 func player_action(action_index: int, action_direction: Vector2, peer_id: int = 0) -> void:
-	#var peer_id: int = multiplayer.get_remote_sender_id()
 	peer_id = multiplayer.get_remote_sender_id()
 	var player: Player = entity_collection.get(peer_id) as Player
 	if not player:
 		return
 	if player.equiped_weapon_right.try_perform_action(action_index, action_direction):
 		propagate_rpc(player_action.bindv([action_index, action_direction, peer_id]))
-	#for connected_peer_id: int in connected_peers:
-		#player_action.rpc_id(connected_peer_id, action_index, action_direction)
-
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_data(data_type: String) -> void:
@@ -277,8 +242,6 @@ func request_data(data_type: String) -> void:
 func fetch_data(_data: Dictionary, _data_type: String) -> void:
 	pass
 
-
 func propagate_rpc(callable: Callable) -> void:
 	for peer_id: int in connected_peers:
 		callable.rpc_id(peer_id)
-		#callable.bindv(arguments).rpc_id(peer_id)
